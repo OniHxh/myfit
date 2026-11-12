@@ -32,3 +32,4 @@ En ligne : https://onihxh.github.io/myfit/ · Dépôt : https://github.com/OniHx
 2. Pesée imposée, bilan des pesées, comparaison photo avant/après.
 3. Ajustement auto des calories, mensurations, bilan hebdo, copie de repas, repas plaisir, records, minuteur boxe, calories brûlées, rappel de sauvegarde, badges.
 4. Thème sport premium sombre, graphiques calories + sport, calendrier des séances.
+5. Carte « 🎯 Le point » dans Repas : indications courtes selon ce qu'il reste (prot, glucides, lipides, kcal par repas). Ton cash, sans exemples d'aliments ni idées de plats (l'utilisateur n'aime pas trop les légumes et préfère des indications).

@@ -149,6 +149,9 @@ label.f{display:block;margin-bottom:12px}label.f>span{display:block;font-size:13
 .panel .in{background:var(--s2)}
 .sheet-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px}
 .sheet-h h3{font-size:19px}
+.coach{background:linear-gradient(160deg,rgba(91,124,250,.14),rgba(139,92,246,.06) 60%),var(--s1);border:1px solid rgba(124,140,255,.18)}
+.coach .tip{margin-top:10px;padding:10px 12px 10px 14px;border-radius:12px;background:var(--s2);font-size:14px;line-height:1.4;border-left:3px solid var(--ac)}
+.coach .tip.ok{border-left-color:var(--ok)}.coach .tip.warn{border-left-color:var(--c)}.coach .tip.bad{border-left-color:var(--bad)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}
 .chips button{background:var(--s2);border-radius:99px;padding:7px 12px;font-size:14px;font-weight:600}
 .chips button.on{background:var(--ac);color:var(--on-ac)}
@@ -612,12 +615,45 @@ function vMeals(){
   <div class="row" style="margin-top:12px"><button class="btn sm ${d.cheat?'pri':''}" data-a="cheat">${d.cheat?'✓ Repas plaisir':'Repas plaisir'}</button>${tot.k===0&&prevDayWithFood(k)?`<button class="btn sm" data-a="copyDay">Copier la journée ${prevDayWithFood(k)===addDays(k,-1)?'de la veille':'du '+fmtShort(prevDayWithFood(k))}</button>`:''}</div>
   ${d.cheat?`<div class="small muted" style="margin-top:8px">Profite ! Ce jour ne compte pas comme un écart. Cette semaine : ${weekReport(weekStart(k)).cheat} repas plaisir (1 par semaine conseillé).</div>`:''}
  </section>
+ ${coachCard(k)}
  ${MEALS.map(([m,l])=>{const items=d.meals[m]||[],mt=sumItems(items);return `
  <section class="card">
   <div class="row between"><h3>${l}</h3><span class="muted small">${f0(mt.k)} kcal</span></div>
   ${items.length?`<div style="margin-top:6px">${items.map(it=>{const x=itemT(it);return `<button class="li" data-a="editItem" data-m="${m}" data-id="${it.id}"><div class="grow"><div class="t">${esc(it.name)}</div><div class="s">${amountLabel(it)} · P ${r0(x.p)} · G ${r0(x.c)} · L ${r0(x.f)}</div></div><div class="r">${f0(x.k)}</div></button>`}).join('')}</div>`:''}
   <div class="row wrap" style="margin-top:10px;gap:6px"><button class="btn sm pri" data-a="addFood" data-m="${m}">+ Ajouter</button><button class="btn sm" data-a="copyMeal" data-m="${m}">Copier</button>${items.length?`<button class="btn sm" data-a="saveFav" data-m="${m}">☆ Favori</button>`:''}</div>
  </section>`}).join('')}`;
+}
+/* ----- Indications repas (selon ce qu'il reste) ----- */
+const MEAL_NAME={b:'ton petit-déj',l:'ton déj',d:'ton dîner',s:'ta collation'};
+function coachTarget(k){
+ const d=day(k),t=targets(),tot=dayT(k),rem=t.kcal-tot.k,empty=m=>!(d.meals[m]||[]).length;
+ let meal,h=24;
+ if(k!==today())meal=['b','l','d'].find(empty)||'s';
+ else{h=new Date().getHours()+new Date().getMinutes()/60;meal=h<10.5?'b':h<15?'l':h<17.5?'s':'d';
+  if(meal!=='s'&&!empty(meal))meal=['b','l','d'].slice(['b','l','d'].indexOf(meal)+1).find(empty)||'s'}
+ const left=meal==='s'?1:['b','l','d'].slice(['b','l','d'].indexOf(meal)).filter(empty).length||1;
+ return{t,tot,rem,meal,h,budget:rem/left,protLeft:t.p-tot.p,carbLeft:t.c-tot.c,fatLeft:t.f-tot.f}
+}
+function coachTips(k){
+ const C=coachTarget(k),{t,tot,rem}=C,out=[],add=(lvl,txt)=>out.push({lvl,txt});
+ if(tot.k===0){add('info',`Journée vierge : <b>${f0(t.kcal)} kcal</b> à poser. Vise environ <b>${f0(t.p/3)} g de prot</b> par repas.`);return out}
+ if(rem<0){add('bad',`T'as dépassé de <b>${f0(-rem)} kcal</b>. Pas de drame, on ne rattrape pas : demain on repart normal.`);return out}
+ if(C.carbLeft<0)add('bad',`Attention, glucides déjà dépassés (<b>+${f0(-C.carbLeft)} g</b>). Ce qui reste, mets-le dans les prot.`);
+ else if(C.carbLeft<t.c*0.15&&rem>250)add('warn',`Glucides presque pleins (<b>${f0(C.carbLeft)} g</b> restants) : calme les féculents et le sucré.`);
+ if(C.fatLeft<0)add('bad',`Lipides dépassés (<b>+${f0(-C.fatLeft)} g</b>) : lâche le gras pour le reste de la journée.`);
+ else if(C.fatLeft<t.f*0.15&&rem>250)add('warn',`Lipides presque au max (<b>${f0(C.fatLeft)} g</b> restants) : évite le gras.`);
+ if(C.protLeft>=40||(C.protLeft>=20&&C.protLeft*4>rem*0.35))add('warn',`Va chercher tes prot : il t'en manque <b>${f0(C.protLeft)} g</b>. Le reste de tes calories doit surtout servir à ça.`);
+ else if(C.protLeft>=20)add('info',`Encore <b>${f0(C.protLeft)} g de prot</b> à caser, t'as la place.`);
+ else if(rem>250)add('ok','Prot validées 💪');
+ if(rem<150)add('ok',`Il te reste presque rien (<b>${f0(rem)} kcal</b>). Si t'as faim, un petit truc léger et basta.`);
+ else if(C.h>=21&&rem>500)add('info',`Il reste <b>${f0(rem)} kcal</b>, pas obligé de tout manger. Si t'as faim, vas-y tranquille.`);
+ else if(!out.some(x=>x.lvl==='bad'||x.lvl==='warn'))add('ok',`T'es large : environ <b>${f0(Math.round(C.budget/10)*10)} kcal</b> pour ${MEAL_NAME[C.meal]}. Mange chill.`);
+ else add('info',`Environ <b>${f0(Math.round(C.budget/10)*10)} kcal</b> pour ${MEAL_NAME[C.meal]}.`);
+ return out.slice(0,3);
+}
+function coachCard(k){
+ if(day(k).cheat)return '';const tips=coachTips(k);if(!tips.length)return '';
+ return `<section class="card coach"><h3>🎯 Le point</h3>${tips.map(x=>`<div class="tip ${x.lvl}">${x.txt}</div>`).join('')}</section>`;
 }
 function prevDayWithFood(k){for(let i=1;i<=14;i++){const d=addDays(k,-i);if(S.days[d]&&dayT(d).k>0)return d}return null}
 function cloneItems(items){return items.map(it=>Object.assign({},it,{id:uid()}))}
