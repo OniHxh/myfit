@@ -466,7 +466,10 @@ function readMeas(k){const m=Object.assign({},S.measures[k]||{});let any=false;M
 /* Dépense des séances, en kcal NETTES : on retire 1 MET, ce que le corps brûle de toute façon au repos.
    Boxe : MET selon l'intensité choisie (5,5 à 12), temps de rounds uniquement. Muscu : 3,5 MET (pauses incluses dans la durée). */
 const BX_MET=[0,5.5,7,9,10.5,12],MUSCU_MET=3.5;
-function burned(s){const w=weightAt(s.date);if(s.type==='boxe'){const b=s.boxe||{};const min=(b.done||b.rounds||0)*(b.roundMin||3);return Math.round((BX_MET[b.intensity||3]-1)*w*min/60)}return Math.round((MUSCU_MET-1)*w*(s.duration||0)/60)}
+/* Séance ajoutée à la main : MET moyen sur toute la durée (pauses comprises), selon le type et l'intensité 1 à 5 */
+const MAN_MET={boxe:[0,4.5,6,7.5,9,10.5],muscu:[0,2.5,3,3.5,4.5,5.5],cardio:[0,4,5.5,7,9,11]};
+const MAN_TYPES=[['boxe','Boxe / combat'],['muscu','Muscu'],['cardio','Cardio / autre']];
+function burned(s){const w=weightAt(s.date);if(s.manual){const t=MAN_MET[s.type]||MAN_MET.cardio;return Math.round((t[s.manual.intensity||3]-1)*w*(s.duration||0)/60)}if(s.type==='boxe'){const b=s.boxe||{};const min=(b.done||b.rounds||0)*(b.roundMin||3);return Math.round((BX_MET[b.intensity||3]-1)*w*min/60)}return Math.round((MUSCU_MET-1)*w*(s.duration||0)/60)}
 /* ---------- Énergie : calories perdues ----------
    Dépense du jour = métabolisme de base (Mifflin-St Jeor, au poids du jour) × niveau d'activité du profil.
    Déficit = dépense − mangé + séances. Seules les journées TERMINÉES et notées comptent. */
@@ -596,7 +599,7 @@ const IDB={db:null,
 async function loadPhotos(){try{photos=(await IDB.all()).sort((a,b)=>a.date<b.date?-1:1)}catch(e){photos=[]}}
 
 /* ---------- UI state ---------- */
-const ui={anim:true,tab:'home',date:today(),range:90,exo:'',sel:[],cmpMode:false,add:null,qty:null,ed:null};
+const ui={man:null,anim:true,tab:'home',date:today(),range:90,exo:'',sel:[],cmpMode:false,add:null,qty:null,ed:null};
 
 function toast(msg,ms=2200){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),ms)}
 function openSheet(html){const root=$('#sheet-root');root.innerHTML=`<div class="ov" data-a="ovClose"><div class="panel" role="dialog"><div class="grab"></div><div id="sheet">${html}</div></div></div>`;document.body.classList.add('noscroll');requestAnimationFrame(()=>requestAnimationFrame(()=>root.firstChild&&root.firstChild.classList.add('in')))}
@@ -900,6 +903,19 @@ function openFood(f,extra){const portion=!!f.portion;openQty(Object.assign({name
 function keepFood(f){if(!f||!f.off)return;const i=S.customFoods.findIndex(x=>x.code&&x.code===f.code);const o={n:f.n,k:f.k,p:f.p,c:f.c,f:f.f,u:f.u,ml:f.ml,code:f.code,off:true};if(i>=0)S.customFoods[i]=o;else S.customFoods.push(o)}
 /* ---------- Scanner de code-barres ---------- */
 let scanner=null;
+function sheetMan(){
+ const m=ui.man,est=burned({manual:{intensity:m.int},type:m.type,duration:m.dur,date:m.date});
+ const lbl=['','Tranquille','Modérée','Soutenue','Dure','À fond'];
+ return sheetHead('Séance déjà faite')+`
+ <label class="f"><span>Type</span><div class="seg">${MAN_TYPES.map(([v,l])=>`<button data-a="manPick" data-f="type" data-v="${v}" class="${m.type===v?'on':''}">${l}</button>`).join('')}</div></label>
+ <label class="f"><span>Nom (facultatif)</span><input class="in" id="man-name" value="${esc(m.name)}" placeholder="${m.type==='boxe'?'Ex. Boxe thaï':m.type==='muscu'?'Ex. Push':'Ex. Course, vélo, foot…'}" oninput="ui.man.name=this.value"></label>
+ <label class="f"><span>Date</span><input class="in" type="date" id="man-date" value="${m.date}" max="${today()}" onchange="ui.man.date=this.value"></label>
+ <div class="f"><span class="small muted" style="display:block;margin:0 0 5px 2px">Durée totale (pauses comprises)</span><div class="stepper" style="justify-content:space-between"><button class="icon-btn" data-a="manDur" data-d="-15">−</button><b style="white-space:nowrap;font-size:22px">${Math.floor(m.dur/60)?Math.floor(m.dur/60)+' h ':''}${pad(m.dur%60)}${Math.floor(m.dur/60)?'':' min'}</b><button class="icon-btn" data-a="manDur" data-d="15">+</button></div>
+  <div class="chips" style="margin:10px 0 0">${[45,60,90,120].map(v=>`<button data-a="manPick" data-f="dur" data-v="${v}" class="${m.dur===v?'on':''}">${v<60?v+' min':v/60+' h'}</button>`).join('').replace('1.5 h','1 h 30')}</div></div>
+ <label class="f" style="margin-top:12px"><span>Intensité moyenne : ${lbl[m.int]}</span><div class="seg">${[1,2,3,4,5].map(i=>`<button data-a="manPick" data-f="int" data-v="${i}" class="${m.int===i?'on':''}">${i}</button>`).join('')}</div></label>
+ <div class="preview" style="grid-template-columns:1fr"><div><b>≈ ${f0(est)} kcal</b><span>estimation, à ton poids (${f1(weightAt(m.date))} kg)</span></div></div>
+ <button class="btn pri block" data-a="manSave">Ajouter la séance</button>`;
+}
 function sheetScan(){return sheetHead('Scanner un code-barres',`<button class="btn sm" data-a="scanBack">Retour</button>`)+`
  <div class="scanbox"><video id="scanv" playsinline muted autoplay></video><i class="scanframe"></i><i class="scanline"></i></div>
  <div id="scanmsg" class="small muted" style="text-align:center;margin:10px 0 14px;min-height:18px">Ouverture de la caméra…</div>
@@ -964,8 +980,9 @@ function vSport(){
  ${S.templates.length?S.templates.map(t=>`<section class="card"><div class="row between"><div class="grow"><h3>${esc(t.name)}</h3><div class="small muted" style="margin-top:2px"><span class="badge ${t.type}">${t.type==='boxe'?'Boxe':'Muscu'}</span> ${t.type==='boxe'?`${t.rounds} × ${t.roundMin} min`:`${t.exercises.length} exercices`}</div></div><button class="btn sm" data-a="editTpl" data-id="${t.id}">Modifier</button><button class="btn sm pri" data-a="startTpl" data-id="${t.id}">Démarrer</button></div></section>`).join(''):
  `<div class="card empty">Aucune séance créée.<br>Crée tes séances types ou pars d'exemples à modifier.<div class="row" style="justify-content:center;margin-top:12px"><button class="btn sm" data-a="examples">Ajouter des exemples</button></div></div>`}
  <div class="grid2"><button class="btn" data-a="newTpl">+ Nouvelle séance</button><button class="btn" data-a="startFree">Séance libre</button></div>
+ <button class="btn block" style="margin-top:10px" data-a="manSess">+ Ajouter une séance déjà faite</button>
  <h2>Historique</h2>
- <section class="card">${hist.length?hist.map(s=>`<button class="li" data-a="viewSess" data-id="${s.id}"><div class="grow"><div class="t">${esc(s.name)}</div><div class="s">${fmtDay(s.date)} · ${s.duration||0} min · ≈ ${f0(burned(s))} kcal${s.prs&&s.prs.length?` · 🏆 ${s.prs.length}`:''}</div></div><div class="r small">${s.type==='boxe'?`${s.boxe.done||s.boxe.rounds} rounds`:`${f0(volume(s))} kg`}</div></button>`).join(''):'<div class="empty">Aucune séance enregistrée.</div>'}</section>`;
+ <section class="card">${hist.length?hist.map(s=>`<button class="li" data-a="viewSess" data-id="${s.id}"><div class="grow"><div class="t">${esc(s.name)}</div><div class="s">${fmtDay(s.date)} · ${s.duration||0} min · ≈ ${f0(burned(s))} kcal${s.prs&&s.prs.length?` · 🏆 ${s.prs.length}`:''}</div></div><div class="r small">${s.manual?'<span class="badge">ajoutée</span>':s.type==='boxe'?`${s.boxe.done||s.boxe.rounds} rounds`:`${f0(volume(s))} kg`}</div></button>`).join(''):'<div class="empty">Aucune séance enregistrée.</div>'}</section>`;
 }
 function bestSet(sets){let b=null;(sets||[]).forEach(x=>{const kg=num(x.kg),r=num(x.reps);if(kg>0&&r>0){const rm=kg*(1+r/30);if(!b||rm>b.rm)b={rm,kg,reps:r}}});return b}
 function findPRs(exs){
@@ -1527,9 +1544,16 @@ const A={
   else toast(`Séance enregistrée · ≈ ${f0(kc)} kcal brûlées`)},
  cancelSess(){if(!confirm('Abandonner la séance ? Rien ne sera enregistré.'))return;S.active=null;stopRest();save();render()},
  viewSess(el){const s=S.sessions.find(x=>x.id===el.dataset.id);if(!s)return;
-  const body=s.type==='boxe'?`<div class="kv"><span>Rounds</span><b>${s.boxe.rounds} × ${f1(s.boxe.roundMin)} min</b></div><div class="kv"><span>Intensité</span><b>${s.boxe.intensity}/5</b></div>${s.boxe.notes?`<p class="small" style="margin-top:8px">${esc(s.boxe.notes)}</p>`:''}`:
+  const body=s.manual?`<div class="kv"><span>Type</span><b>${(MAN_TYPES.find(x=>x[0]===s.type)||['','Autre'])[1]}</b></div><div class="kv"><span>Intensité</span><b>${s.manual.intensity}/5</b></div><p class="small muted" style="margin-top:8px">Séance ajoutée à la main : calories estimées d'après la durée et l'intensité.</p>`:s.type==='boxe'?`<div class="kv"><span>Rounds</span><b>${s.boxe.rounds} × ${f1(s.boxe.roundMin)} min</b></div><div class="kv"><span>Intensité</span><b>${s.boxe.intensity}/5</b></div>${s.boxe.notes?`<p class="small" style="margin-top:8px">${esc(s.boxe.notes)}</p>`:''}`:
    s.exercises.map(e=>`<div class="li" style="display:block"><div class="t">${esc(e.name)}</div><div class="s">${e.sets.map(x=>`${x.kg||0} kg × ${x.reps||0}`).join(' · ')}</div></div>`).join('')+`<div class="kv" style="margin-top:8px"><span>Volume total</span><b>${f0(volume(s))} kg</b></div>`;
   openSheet(sheetHead(esc(s.name))+`<div class="small muted" style="margin-bottom:10px">${fmtLong(s.date)} · ${s.duration} min · ≈ ${f0(burned(s))} kcal brûlées</div>`+(s.prs&&s.prs.length?`<div class="small" style="margin-bottom:8px">🏆 Records : ${s.prs.map(p=>esc(p.name)).join(', ')}</div>`:'')+body+`<button class="btn ghost danger block" style="margin-top:12px" data-a="delSess" data-id="${s.id}">Supprimer</button>`)},
+ manSess(){ui.man={type:'boxe',dur:60,int:3,date:today(),name:''};setSheet(sheetMan())},
+ manPick(el){ui.man[el.dataset.f]=el.dataset.f==='type'?el.dataset.v:+el.dataset.v;if(el.dataset.f==='type')ui.man.name='';setSheet(sheetMan())},
+ manDur(el){ui.man.dur=clamp(ui.man.dur+ +el.dataset.d,5,600);setSheet(sheetMan())},
+ manSave(){const m=ui.man,name=($('#man-name').value.trim()||(MAN_TYPES.find(x=>x[0]===m.type)[1]));const d=$('#man-date').value;
+  if(!d||d>today())return toast('Date invalide');
+  const ss={id:uid(),templateId:null,name,type:m.type,date:d,start:parseKey(d).getTime()+12*36e5,duration:m.dur,exercises:[],manual:{intensity:m.int}};
+  S.sessions.push(ss);save();closeSheet();render();toast(`Séance ajoutée · ≈ ${f0(burned(ss))} kcal brûlées`)},
  delSess(el){if(!confirm('Supprimer cette séance de l\'historique ?'))return;S.sessions=S.sessions.filter(x=>x.id!==el.dataset.id);save();closeSheet();render()},
  restAdd(){if(rest){rest.end+=15000;rest.total+=15}},
  restSkip(){stopRest()},
