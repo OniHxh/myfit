@@ -15,7 +15,7 @@ En ligne : https://onihxh.github.io/myfit/ · Dépôt : https://github.com/OniHx
 
 ## Architecture
 
-- Une seule page : `index.html` (HTML + CSS + JS vanilla, aucune dépendance). Plus `manifest.webmanifest` (« MyFit – Sport & Nutrition », thème `#07080c`), `sw.js` network-first, et les icônes `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`.
+- Une seule page : `index.html` (HTML + CSS + JS vanilla). Seule dépendance externe : le lecteur de codes-barres `@zxing/library@0.21.3` (jsDelivr, avec hash SRI), chargé uniquement à l'ouverture du scanner quand `BarcodeDetector` n'existe pas (cas de Safari iOS). Plus `manifest.webmanifest` (« MyFit – Sport & Nutrition », thème `#07080c`), `sw.js` network-first, et les icônes `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`.
 - Données : `localStorage['myfit.v1']`, avec export / import JSON (`exportData`, `importData`, partage via `navigator.share`).
 - Vues :
   - `vOnboarding` : profil de départ.
@@ -33,3 +33,7 @@ En ligne : https://onihxh.github.io/myfit/ · Dépôt : https://github.com/OniHx
 3. Ajustement auto des calories, mensurations, bilan hebdo, copie de repas, repas plaisir, records, minuteur boxe, calories brûlées, rappel de sauvegarde, badges.
 4. Thème sport premium sombre, graphiques calories + sport, calendrier des séances.
 5. Carte « 🎯 Le point » dans Repas : indications courtes selon ce qu'il reste (prot, glucides, lipides, kcal par repas). Ton cash, sans exemples d'aliments ni idées de plats (l'utilisateur n'aime pas trop les légumes et préfère des indications).
+6. Coach sur l'accueil, calories perdues (alimentation + sport, graphique par jour, prévu vs balance), bilan hebdo limité aux journées terminées, animations.
+7. Dépense mesurée (`adaptive()`) : 28 derniers jours (hors 10 premiers jours de sèche), calories mangées + pente du poids × 7700, mélangée à la formule selon une fiabilité 0-100 %. Remplace l'ajustement auto quand fiabilité ≥ 50 %. Le sport moyen est retiré de la dépense de base puis les séances du jour sont ajoutées (`tdeeAt`) : pas de double comptage.
+   Recherche Open Food Facts (`offSearch`, fr.openfoodfacts.org) et scan de codes-barres (`startScan`) ; les produits utilisés sont gardés dans « Mes aliments » (champ `code`).
+   Muscu : double progression (`progression()`), +2,5 / 2 / 1 kg selon la charge, décharge −10 % après 3 séances sans progrès ; tendance par exercice dans Progrès.
