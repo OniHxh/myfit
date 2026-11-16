@@ -38,3 +38,4 @@ En ligne : https://onihxh.github.io/myfit/ · Dépôt : https://github.com/OniHx
    Recherche Open Food Facts (`offSearch`, fr.openfoodfacts.org) et scan de codes-barres (`startScan`) ; les produits utilisés sont gardés dans « Mes aliments » (champ `code`).
    Muscu : double progression (`progression()`), +2,5 / 2 / 1 kg selon la charge, décharge −10 % après 3 séances sans progrès ; tendance par exercice dans Progrès.
 8. Ajout manuel d'une séance oubliée (Sport › « + Ajouter une séance déjà faite ») : type boxe / muscu / cardio, date, durée totale, intensité 1-5 ; kcal = (MET − 1) × poids × heures avec `MAN_MET`. Champ `manual:{intensity}` sur la séance.
+9. Graphique « Calories perdues » : la barre d'aujourd'hui suit les repas en direct (dépense + sport du jour, partie mangée en jaune, pointillés = déficit actuel, trait blanc = déficit si on finit pile à l'objectif).

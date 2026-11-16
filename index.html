@@ -272,7 +272,7 @@ html{scroll-behavior:smooth}
  .enter>*:nth-child(2){animation-delay:.04s}.enter>*:nth-child(3){animation-delay:.08s}.enter>*:nth-child(4){animation-delay:.12s}.enter>*:nth-child(5){animation-delay:.16s}.enter>*:nth-child(6){animation-delay:.2s}.enter>*:nth-child(7){animation-delay:.24s}.enter>*:nth-child(n+8){animation-delay:.28s}
  .enter .rfg{animation:ringIn 1.1s cubic-bezier(.2,.8,.2,1) both}
  .enter .cfg{animation:cringIn 1.1s .15s cubic-bezier(.2,.8,.2,1) both}
- .enter .kb .b,.enter .db .b,.enter .db .sp,.enter .db .ghost{transform-box:fill-box;transform-origin:50% 100%;animation:grow .7s cubic-bezier(.2,.8,.2,1) both}
+ .enter .kb .b,.enter .db .b,.enter .db .sp,.enter .db .ghost,.enter .db .eaten{transform-box:fill-box;transform-origin:50% 100%;animation:grow .7s cubic-bezier(.2,.8,.2,1) both}
  .enter .db .neg{transform-box:fill-box;transform-origin:50% 0;animation:grow .7s cubic-bezier(.2,.8,.2,1) both}
  .enter .db .vl,.enter .kb text{animation:fade .6s .35s both}
  .enter .chart .ln:not(.plan){stroke-dasharray:1;animation:draw 1.2s cubic-bezier(.4,0,.2,1) both}
@@ -297,6 +297,8 @@ html{scroll-behavior:smooth}
 @keyframes spin{to{transform:rotate(360deg)}}
 .sugg{display:flex;gap:9px;align-items:flex-start;margin-top:10px;padding:9px 11px;border-radius:12px;font-size:13px;line-height:1.4;background:rgba(124,140,255,.08);border:1px solid rgba(124,140,255,.25)}
 .sugg p{margin:0;color:#c9cee0}.sugg.up{background:rgba(52,211,153,.08);border-color:rgba(52,211,153,.3)}.sugg.stall{background:rgba(251,191,36,.07);border-color:rgba(251,191,36,.3)}
+.db .eaten{fill:rgba(251,191,36,.16);stroke:rgba(251,191,36,.55);stroke-width:1}
+.db .tick{stroke:#fff;stroke-width:2;stroke-linecap:round}
 </style>
 </head>
 <body>
@@ -1099,16 +1101,20 @@ function rangeKeys(n){const out=[];for(let i=n-1;i>=0;i--)out.push(addDays(today
 /* Barres de déficit : vert = alimentation, rose = sport, rouge = surplus, pointillés = aujourd'hui (prévu si tu manges ton objectif) */
 function defBars(keys,{h=180,letters=false}={}){
  const T=today(),n=keys.length,W=340,H=h,pl=36,pr=6,pt=18,pb=letters?22:20,quota=targets().kcal,st=S.profile.startDate||'';
- const ds=keys.map(k=>{const d=energyDay(k);d.pre=k<st;d.proj=k===T?d.tdee-Math.max(quota,d.eat)+d.sport:null;return d});
- const vals=ds.map(d=>d.done&&d.logged&&!d.pre?d.total:d.proj!=null?d.proj:0);
- let hi=Math.max(400,...vals),lo=Math.min(0,...vals);const pad_=(hi-lo)*0.12;hi+=pad_;if(lo<0)lo-=pad_;
+ const ds=keys.map(k=>{const d=energyDay(k);d.pre=k<st;d.cur=k===T?d.tdee-d.eat+d.sport:null;d.proj=k===T?d.tdee-Math.max(quota,d.eat)+d.sport:null;return d});
+ const vals=ds.map(d=>d.done&&d.logged&&!d.pre?d.total:d.cur!=null?Math.max(d.cur+d.eat,d.proj):0),mins=ds.map(d=>d.cur!=null?Math.min(d.cur,d.proj):0);
+ let hi=Math.max(400,...vals),lo=Math.min(0,...vals,...mins);const pad_=(hi-lo)*0.12;hi+=pad_;if(lo<0)lo-=pad_;
  const Y=v=>pt+(hi-v)/(hi-lo)*(H-pt-pb),z=Y(0),cw=(W-pl-pr)/n,bw=Math.max(2.5,Math.min(28,cw*0.62)),rx=Math.min(6,bw/2);
  const step=hi-lo>3000?1000:500;let g='';
  for(let v=Math.ceil(lo/step)*step;v<=hi;v+=step){if(v===0)continue;g+=`<line class="gl" x1="${pl}" x2="${W-pr}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text x="${pl-5}" y="${(Y(v)+3).toFixed(1)}" text-anchor="end">${v>0?'':'+'}${f0(Math.abs(v))}</text>`}
  const lbl=v=>Math.abs(v)>=1000?(Math.abs(v)/1000).toFixed(1).replace('.',',')+'k':f0(Math.abs(v));
  ds.forEach((d,i)=>{
   const x=pl+i*cw+(cw-bw)/2,cx=x+bw/2,v=vals[i];let b='';
-  if(d.proj!=null){const y=Math.min(Y(d.proj),z),hh=Math.max(2,Math.abs(Y(d.proj)-z));b+=`<rect class="ghost" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" rx="${rx}"/>`;if(n<=10)b+=`<text x="${cx.toFixed(1)}" y="${(d.proj>=0?y-5:y+hh+11).toFixed(1)}" text-anchor="middle" class="vl mu">${lbl(d.proj)}</text>`}
+  if(d.cur!=null){const yc=Y(d.cur),y=Math.min(yc,z),hh=Math.max(2,Math.abs(yc-z)),yp=Y(d.proj);
+   b+=`<rect class="ghost" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" rx="${rx}"/>`;
+   if(d.eat>0)b+=`<rect class="eaten" x="${x.toFixed(1)}" y="${Math.min(Y(d.cur+d.eat),yc).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.abs(Y(d.cur+d.eat)-yc).toFixed(1)}" rx="${rx}"/>`;
+   b+=`<line class="tick" x1="${(x-3).toFixed(1)}" x2="${(x+bw+3).toFixed(1)}" y1="${yp.toFixed(1)}" y2="${yp.toFixed(1)}"/>`;
+   if(n<=10)b+=`<text x="${cx.toFixed(1)}" y="${(Math.min(Y(d.cur+d.eat),yp)-5).toFixed(1)}" text-anchor="middle" class="vl mu">${d.cur<0?'+':''}${lbl(d.cur)}</text>`}
   else if(d.done&&d.logged&&!d.pre){
    if(v>=0){const sp=Math.min(Math.max(d.sport,0),v),ys=Y(v),yf=Y(v-sp);
     b+=`<rect class="b" x="${x.toFixed(1)}" y="${ys.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(2,z-ys).toFixed(1)}" rx="${rx}"/>`;
@@ -1124,7 +1130,7 @@ function defBars(keys,{h=180,letters=false}={}){
  g+=`<line class="z" x1="${pl}" x2="${W-pr}" y1="${z.toFixed(1)}" y2="${z.toFixed(1)}"/>`;
  return `<div class="db"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Calories perdues par jour">${g}</svg></div>`;
 }
-const DB_LEGEND=`<div class="legend wrap"><span><i style="background:linear-gradient(#34d399,#0ea5e9)"></i>Alimentation</span><span><i style="background:#f472b6"></i>Sport</span><span><i style="background:#f87171"></i>Surplus</span><span><i style="border:1.5px dashed #7c8cff;background:none"></i>Aujourd'hui (prévu)</span></div>`;
+const DB_LEGEND=`<div class="legend wrap"><span><i style="background:linear-gradient(#34d399,#0ea5e9)"></i>Alimentation</span><span><i style="background:#f472b6"></i>Sport</span><span><i style="background:#f87171"></i>Surplus</span><span><i style="border:1.5px dashed #7c8cff;background:none"></i>Aujourd'hui, en cours</span><span><i style="background:rgba(251,191,36,.5)"></i>Mangé aujourd'hui</span><span><i style="background:#fff;height:2px;border-radius:0"></i>Si tu finis à ton objectif</span></div>`;
 /* Perte prévue par les calories vs perte réelle mesurée sur la balance */
 function estVsReal(){
  const p=S.profile,T=today(),ks=weightKeys(),st=p.startDate||ks[0]||T,est=[],real=[];let cum=0,nd=0,nl=0;
@@ -1586,7 +1592,7 @@ const A={
  adToggle(){S.settings.adaptive=S.settings.adaptive===false;save();render();toast(S.settings.adaptive===false?'Dépense mesurée désactivée':'Dépense mesurée activée')},
  defTip(el){const k=el.dataset.k,d=energyDay(k),T=today();
   if(k>T)return;
-  if(k===T){const q=targets().kcal,pj=d.tdee-Math.max(q,d.eat)+d.sport;return toast(`Aujourd'hui (en cours) : ${f0(d.eat)} kcal mangées. Si tu finis à ${f0(Math.max(q,d.eat))} kcal : ≈ ${f0(Math.abs(pj))} kcal ${pj>=0?'perdues':'en trop'}`,4200)}
+  if(k===T){const q=targets().kcal,cur=d.tdee+d.sport-d.eat,pj=d.tdee-Math.max(q,d.eat)+d.sport;return toast(`Aujourd'hui : dépense ≈ ${f0(d.tdee+d.sport)} − mangé ${f0(d.eat)} = ${cur>=0?'−':'+'}${f0(Math.abs(cur))} kcal pour l'instant. Si tu finis à ${f0(Math.max(q,d.eat))} kcal : ≈ ${f0(Math.abs(pj))} kcal ${pj>=0?'perdues':'en trop'}`,5000)}
   if(!d.logged)return toast(`${fmtDay(k)} : repas non notés`);
   toast(`${fmtDay(k)} : dépense ≈ ${f0(d.tdee)}${d.sport?` + sport ${f0(d.sport)}`:''} − mangé ${f0(d.eat)} = ${d.total>=0?'−':'+'}${f0(Math.abs(d.total))} kcal`,4200)},
  calNav(el){const[y,m]=ui.calM.split('-').map(Number),d=new Date(y,m-1+Number(el.dataset.d),1),n=d.getFullYear()+'-'+pad(d.getMonth()+1);if(n>today().slice(0,7))return;ui.calM=n;render()},
